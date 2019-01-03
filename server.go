@@ -2,85 +2,114 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"os"
 
-	"github.com/google/gousb"
+	"github.com/ebfe/scard"
 )
 
+func errorExit(err error) {
+	fmt.Println(err)
+	os.Exit(1)
+}
+
+func waitUntilCardPresent(ctx *scard.Context, readers []string) (int, error) {
+	rs := make([]scard.ReaderState, len(readers))
+	for i := range rs {
+		rs[i].Reader = readers[i]
+		rs[i].CurrentState = scard.StateUnaware
+	}
+
+	for {
+		for i := range rs {
+			if rs[i].EventState&scard.StatePresent != 0 {
+				return i, nil
+			}
+			rs[i].CurrentState = rs[i].EventState
+		}
+		err := ctx.GetStatusChange(rs, -1)
+		if err != nil {
+			return -1, err
+		}
+	}
+}
+
+func waitUntilCardRelease(ctx *scard.Context, readers []string, index int) error {
+	rs := make([]scard.ReaderState, 1)
+
+	rs[0].Reader = readers[index]
+	rs[0].CurrentState = scard.StatePresent
+
+	for {
+
+		if rs[0].EventState&scard.StateEmpty != 0 {
+			return nil
+		}
+		rs[0].CurrentState = rs[0].EventState
+
+		err := ctx.GetStatusChange(rs, -1)
+		if err != nil {
+			return err
+		}
+	}
+}
+
 func main() {
-	// Initialize a new Context.
-	ctx := gousb.NewContext()
-	defer ctx.Close()
 
-	// Iterate through available Devices, finding all that match a known VID/PID.
-	vid, pid := gousb.ID(0x072f), gousb.ID(0x2200)
-	devs, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
-		// this function is called for every device present.
-		// Returning true means the device should be opened.
-		return desc.Vendor == vid && desc.Product == pid
-	})
-	// All returned devices are now open and will need to be closed.
-	for _, d := range devs {
-		defer d.Close()
-	}
+	// Establish a context
+	ctx, err := scard.EstablishContext()
 	if err != nil {
-		log.Fatalf("OpenDevices(): %v", err)
+		errorExit(err)
 	}
-	if len(devs) == 0 {
-		log.Fatalf("no devices found matching VID %s and PID %s", vid, pid)
-	}
+	defer ctx.Release()
 
-	// Pick the first device found.
-	dev := devs[0]
-
-	// Switch the configuration to #2.
-	cfg, err := dev.Config(1)
+	// List available readers
+	readers, err := ctx.ListReaders()
 	if err != nil {
-		log.Fatalf("%s.Config(2): %v", dev, err)
-	}
-	defer cfg.Close()
-
-	// In the config #2, claim interface #3 with alt setting #0.
-	intf, err := cfg.Interface(0, 0)
-	if err != nil {
-		log.Fatalf("%s.Interface(0, 0): %v", cfg, err)
-	}
-	defer intf.Close()
-
-	// In this interface open endpoint #6 for reading.
-	epIn, err := intf.InEndpoint(2)
-	if err != nil {
-		log.Fatalf("%s.InEndpoint(2): %v", intf, err)
+		errorExit(err)
 	}
 
-	// And in the same interface open endpoint #5 for writing.
-	epOut, err := intf.OutEndpoint(2)
-	if err != nil {
-		log.Fatalf("%s.OutEndpoint(2): %v", intf, err)
+	fmt.Printf("Found %d readers:\n", len(readers))
+	for i, reader := range readers {
+		fmt.Printf("[%d] %s\n", i, reader)
 	}
 
-	// Buffer large enough for 10 USB packets from endpoint 6.
-	buf := make([]byte, 10*epIn.Desc.MaxPacketSize)
-	total := 0
-	// Repeat the read/write cycle 10 times.
-	for i := 0; i < 10; i++ {
-		// readBytes might be smaller than the buffer size. readBytes might be greater than zero even if err is not nil.
-		readBytes, err := epIn.Read(buf)
-		if err != nil {
-			fmt.Println("Read returned an error:", err)
+	if len(readers) > 0 {
+		for {
+			fmt.Println("Waiting for a Card")
+			index, err := waitUntilCardPresent(ctx, readers)
+			if err != nil {
+				errorExit(err)
+			}
+
+			// Connect to card
+			fmt.Println("Connecting to card in ", readers[index])
+			card, err := ctx.Connect(readers[index], scard.ShareExclusive, scard.ProtocolAny)
+			if err != nil {
+				errorExit(err)
+			}
+			defer card.Disconnect(scard.ResetCard)
+
+			var cmd = []byte{0xFF, 0xCA, 0x00, 0x00, 0x00}
+
+			rsp, err := card.Transmit(cmd)
+			if err != nil {
+				errorExit(err)
+			}
+			uid := string(rsp[0:7])
+			uidS := fmt.Sprintf("%x", uid)
+			fmt.Printf("Tag UID is: %s\n", uidS)
+			fmt.Printf("Writting as keyboard input...")
+			fmt.Printf("Done.\n")
+
+			card.Disconnect(scard.ResetCard)
+
+			//Wait while card will be released
+			fmt.Print("Waiting for card release...")
+			err = waitUntilCardRelease(ctx, readers, index)
+			fmt.Println("Card released.")
+
 		}
-		if readBytes == 0 {
-			log.Fatalf("IN endpoint 6 returned 0 bytes of data.")
-		}
-		// writeBytes might be smaller than the buffer size if an error occurred. writeBytes might be greater than zero even if err is not nil.
-		writeBytes, err := epOut.Write(buf[:readBytes])
-		if err != nil {
-			fmt.Println("Write returned an error:", err)
-		}
-		if writeBytes != readBytes {
-			log.Fatalf("IN endpoint 5 received only %d bytes of data out of %d sent", writeBytes, readBytes)
-		}
-		total += writeBytes
+
 	}
-	fmt.Printf("Total number of bytes copied: %d\n", total)
+
 }
