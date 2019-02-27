@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/byuoitav/room-auth-ms/helpers"
 	"github.com/ebfe/scard"
 )
 
@@ -98,6 +99,18 @@ func main() {
 			uid := string(rsp[0:7])
 			uidS := fmt.Sprintf("%x", uid)
 			fmt.Printf("Tag UID is: %s\n", uidS)
+			idNumber, _ := helpers.GetIdNumber(uidS)
+			// if err != nil {
+			// 	log.L.Errorf("Failed to get ID Number: %s", err.Error())
+			// 	fmt.Printf("the error is: %s", err)
+			// }
+			NetID, _ := helpers.GetNetID(idNumber)
+			// if err != nil {
+			// 	log.L.Errorf("Failed to get NetID: %s", err.Error())
+			// 	fmt.Printf("the error is: %s", error)
+			// }
+			fmt.Printf("Tag UID is: %s\n", NetID)
+			helpers.SendEvent(NetID)
 			fmt.Printf("Writting as keyboard input...")
 			fmt.Printf("Done.\n")
 
