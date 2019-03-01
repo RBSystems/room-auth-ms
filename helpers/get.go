@@ -2,16 +2,20 @@ package helpers
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/byuoitav/central-event-system/messenger"
 	"github.com/byuoitav/common/jsonhttp"
 	"github.com/byuoitav/common/log"
 	"github.com/byuoitav/common/nerr"
 	"github.com/byuoitav/common/structs"
+	"github.com/byuoitav/common/v2/events"
 )
 
 var token = "f91a62eaa4c48723412fb1925d60ef"
@@ -67,10 +71,14 @@ func GetIdNumber(utanumber string) (string, *nerr.E) {
 		}
 		return "", nil
 	}
+	if result.Item != nil {
+		if result.Item["byu_id"].S != nil {
+			return fmt.Sprintf("%s", *result.Item["byu_id"].S), nil
+		}
+		return "", nil
+	}
+	return "", nil
 
-	idnumber := result.Item["byu_id"].S
-
-	return fmt.Sprintf("%s", *idnumber), nil
 }
 
 //takes the BYU ID number and uses the Person API to return their info
@@ -99,32 +107,38 @@ func GetNetID(idnumber string) (string, *nerr.E) {
 }
 
 //fix send event thing
-// func SendEvent(netid string) {
+func SendEvent(netid string, runner messenger.Messenger) {
 
-// 	room := os.Getenv("SYSTEM_ID")
-// 	a:=strings.Split(room,"-")
+	room := os.Getenv("SYSTEM_ID")
+	a := strings.Split(room, "-")
+	roominfo := events.BasicRoomInfo{}
+	if len(a) == 3 {
+		roominfo = events.BasicRoomInfo{
+			BuildingID: a[0],
+			RoomID:     a[1],
+		}
+	} else {
+		roominfo = events.BasicRoomInfo{
+			BuildingID: room,
+			RoomID:     room,
+		}
+	}
 
-// 	deviceinfo{
+	basicdevice := events.BasicDeviceInfo{
+		BasicRoomInfo: roominfo,
+		DeviceID:      os.Getenv("SYSTEM_ID"),
+	}
 
-// 	}
+	Event := events.Event{
+		GeneratingSystem: os.Getenv("SYSTEM_ID"),
+		Timestamp:        time.Now(),
+		Key:              "Login",
+		Value:            "True",
+		User:             netid,
+		TargetDevice:     basicdevice,
+		AffectedRoom:     roominfo,
+	}
 
-// 	roominfo:=events.BasicRoomInfo{
-// 		BuildingID: a[0],
-// 		RoomID: a[1],
-// 	}
-// 	Event := events.Event{
-// 		GeneratingSystem: os.Getenv("SYSTEM_ID"),
-// 		Timestamp: time.Now(),
-// 		EventTags: []string,
-// 		Key: "Login",
-// 		Value: "True",
-// 		User: netid,
-// 		TargetDevice: BasicDeviceInfo{
-// 			roominfo,
-// 			DeviceID: os.Getenv("SYSTEM_ID"),
-// 		}
-// 		AffectedRoom: roominfo,
-// 	}
-// 	connection.SendEvent(Event)
+	runner.SendEvent(Event)
 
-// }
+}

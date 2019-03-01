@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/byuoitav/central-event-system/hub/base"
+	"github.com/byuoitav/central-event-system/messenger"
+	"github.com/byuoitav/common/log"
 	"github.com/byuoitav/room-auth-ms/helpers"
 	"github.com/ebfe/scard"
 )
@@ -69,6 +72,12 @@ func main() {
 		errorExit(err)
 	}
 
+	// connect to the hub
+	messenger, er := messenger.BuildMessenger("localhost:7100", base.Messenger, 5000)
+	if er != nil {
+		log.L.Fatalf("failed to build messenger: %s", er)
+	}
+
 	fmt.Printf("Found %d readers:\n", len(readers))
 	for i, reader := range readers {
 		fmt.Printf("[%d] %s\n", i, reader)
@@ -99,20 +108,23 @@ func main() {
 			uid := string(rsp[0:7])
 			uidS := fmt.Sprintf("%x", uid)
 			fmt.Printf("Tag UID is: %s\n", uidS)
-			idNumber, _ := helpers.GetIdNumber(uidS)
-			// if err != nil {
-			// 	log.L.Errorf("Failed to get ID Number: %s", err.Error())
-			// 	fmt.Printf("the error is: %s", err)
-			// }
-			NetID, _ := helpers.GetNetID(idNumber)
-			// if err != nil {
-			// 	log.L.Errorf("Failed to get NetID: %s", err.Error())
-			// 	fmt.Printf("the error is: %s", error)
-			// }
-			fmt.Printf("Tag UID is: %s\n", NetID)
-			helpers.SendEvent(NetID)
-			fmt.Printf("Writting as keyboard input...")
-			fmt.Printf("Done.\n")
+			idNumber, er := helpers.GetIdNumber(uidS)
+			if er != nil {
+				log.L.Errorf("Failed to get ID Number: %s", er.Error())
+				fmt.Printf("the error is: %s", er)
+			}
+			fmt.Printf("idnumber: %s", idNumber)
+			if idNumber != "" {
+				NetID, er := helpers.GetNetID(idNumber)
+				if er != nil {
+					log.L.Errorf("Failed to get NetID: %s", er.Error())
+					fmt.Printf("the error is: %s", er)
+				}
+				fmt.Printf("Tag UID is: %s\n", NetID)
+				helpers.SendEvent(NetID, *messenger)
+				fmt.Printf("Writting as keyboard input...")
+				fmt.Printf("Done.\n")
+			}
 
 			card.Disconnect(scard.ResetCard)
 
