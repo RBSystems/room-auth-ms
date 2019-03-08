@@ -1,0 +1,9 @@
+{
+    "name": "room-auth-ms",
+    "port": "",
+    "env-vars": [
+        "ROOM_SYSTEM",
+        "LOG_LEVEL",
+        "SYSTEM_ID"
+    ]
+}
