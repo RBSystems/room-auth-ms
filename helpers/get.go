@@ -115,7 +115,7 @@ func SendEvent(netid string, runner messenger.Messenger) {
 	if len(a) == 3 {
 		roominfo = events.BasicRoomInfo{
 			BuildingID: a[0],
-			RoomID:     a[1],
+			RoomID:     a[0] + "-" + a[1],
 		}
 	} else {
 		roominfo = events.BasicRoomInfo{
