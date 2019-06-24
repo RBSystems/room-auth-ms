@@ -102,7 +102,7 @@ func GetNetID(idnumber string) (string, *nerr.E) {
 		log.L.Errorf("Failed to get NetID: %s", err.Error())
 		return "", nil
 	}
-	NetID := output.Basic.NetID.Value
+	NetID := output.ID
 	return NetID, nil
 }
 
