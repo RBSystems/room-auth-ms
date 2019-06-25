@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/byuoitav/central-event-system/hub/base"
 	"github.com/byuoitav/central-event-system/messenger"
@@ -59,6 +60,7 @@ func waitUntilCardRelease(ctx *scard.Context, readers []string, index int) error
 
 func main() {
 
+	log.SetLevel("debug")
 	// Establish a context
 	ctx, err := scard.EstablishContext()
 	if err != nil {
@@ -72,8 +74,8 @@ func main() {
 		errorExit(err)
 	}
 
-	// connect to the hub
-	messenger, er := messenger.BuildMessenger("localhost:7100", base.Messenger, 5000)
+	//connect to the hub
+	messenger, er := messenger.BuildMessenger("ITB-1010-CP1:7100", base.Messenger, 5000)
 	if er != nil {
 		log.L.Fatalf("failed to build messenger: %s", er)
 	}
@@ -107,24 +109,25 @@ func main() {
 			}
 			uid := string(rsp[0:7])
 			uidS := fmt.Sprintf("%x", uid)
+			uidS = strings.ToUpper(uidS)
 			fmt.Printf("Tag UID is: %s\n", uidS)
-			idNumber, er := helpers.GetIdNumber(uidS)
+			// idNumber, er := helpers.GetIdNumber(uidS)
+			// if er != nil {
+			// 	log.L.Errorf("Failed to get ID Number: %s", er.Error())
+			// 	fmt.Printf("the error is: %s", er)
+			// }
+			// fmt.Printf("idnumber: %s", idNumber)
+			// if idNumber != "" {
+			NetID, er := helpers.GetNetID(uidS)
 			if er != nil {
-				log.L.Errorf("Failed to get ID Number: %s", er.Error())
+				log.L.Errorf("Failed to get NetID: %s", er.Error())
 				fmt.Printf("the error is: %s", er)
 			}
-			fmt.Printf("idnumber: %s", idNumber)
-			if idNumber != "" {
-				NetID, er := helpers.GetNetID(idNumber)
-				if er != nil {
-					log.L.Errorf("Failed to get NetID: %s", er.Error())
-					fmt.Printf("the error is: %s", er)
-				}
-				fmt.Printf("Tag UID is: %s\n", NetID)
-				helpers.SendEvent(NetID, *messenger)
-				fmt.Printf("Writting as keyboard input...")
-				fmt.Printf("Done.\n")
-			}
+			fmt.Printf("Net ID is: %s\n", NetID)
+			helpers.SendEvent(NetID, *messenger)
+			fmt.Printf("Writing as keyboard input...")
+			fmt.Printf("Done.\n")
+			// }
 
 			card.Disconnect(scard.ResetCard)
 

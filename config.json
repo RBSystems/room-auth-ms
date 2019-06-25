@@ -4,6 +4,8 @@
     "env-vars": [
         "ROOM_SYSTEM",
         "LOG_LEVEL",
-        "SYSTEM_ID"
+        "SYSTEM_ID",
+        "CLIENT_KEY",
+        "CLIENT_SECRET"
     ]
 }
